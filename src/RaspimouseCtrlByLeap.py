@@ -5,9 +5,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(src_dir, arch_dir)))
 
 import Leap
 
+DEBUG = False
+
 class MotionListener(Leap.Listener):
     def on_connect(self, controller):
         print "Connected"
+        
         # Kep Tap Motion
         controller.enable_gesture(Leap.Gesture.TYPE_KEY_TAP);
         controller.config.set("Gesture.KeyTap.MinDownVelocity", 40.0)
@@ -17,46 +20,76 @@ class MotionListener(Leap.Listener):
 
         # Swipe
         controller.enable_gesture(Leap.Gesture.TYPE_SWIPE);
-        controller.config.set("Gesture.Swipe.MinLength", 100.0)
+        controller.config.set("Gesture.Swipe.MinLength", 120.0)
         controller.config.set("Gesture.Swipe.MinVelocity", 750)
         controller.config.save()
 
-    def on_disconnect(self,controller):
+        self.moving = False
+
+    def on_disconnect(self, controller):
         print "Disconnected"
+
+    # Private Functions
+    def move(self):
+        if not self.moving: 
+            print "Start moving."
+            self.moving = True
+
+    def stop(self):
+        if self.moving:
+            print "Stop."
+            self.moving = False
+
+    def turnRight(self):
+        if self.moving:
+            print "Turn Right."
+            
+    def turnLeft(self):
+        if self.moving:
+            print "Turn Left."
 
     def on_frame(self, controller):
         frame = controller.frame()
-        # print "Frame id: %d, timestamp: %d, hands: %d, fingers: %d" % (
-        #    frame.id, frame.timestamp, len(frame.hands), len(frame.fingers))
-        # displaying the position of hand palm
         hands = frame.hands
-        hand = hands[0] # first hand
-        # print(hand.palm_position)
+        if DEBUG:
+            print "Frame id: %d, timestamp: %d, hands: %d, fingers: %d" % (frame.id, frame.timestamp, len(frame.hands), len(frame.fingers))
+            hand = hands[0] # first hand
+            print(hand.palm_position)
 
         if hands.is_empty:
-            print "no hands. Raspimouse should be stopped."
-
-        for gesture in frame.gestures():
-            # start/stop to move by <Key Taps> or <No hand>
-            # https://developer-archive.leapmotion.com/documentation/v2/python/api/Leap.KeyTapGesture.html
-            if gesture.type is Leap.Gesture.TYPE_KEY_TAP:                        
-                key_tap = Leap.KeyTapGesture(gesture)
-                print "keytap detected. Raspimouse will start to move."
-            # Turn Left/Right <Swipe>
-            # https://developer-archive.leapmotion.com/documentation/v2/python/api/Leap.SwipeGesture.html
-            if gesture.type is Leap.Gesture.TYPE_SWIPE:
-                swipe = Leap.SwipeGesture(gesture)
-                direction = swipe.direction
-                if abs(direction[0]) > abs(direction[1]): # horizontal move
-                    if direction[0] > 0:
-                        swipeDirection = "right"
-                    else:
-                        swipeDirection = "left"
-                else: # vertical
-                    swipeDirection = "ignore"    
-                print direction
-                print swipeDirection
-                print "Swipe detected"
+            if DEBUG:
+                print "no hands. Raspimouse should be stopped."
+            self.stop()
+        else:
+            self.move()
+            for gesture in frame.gestures():
+                # start to move by <Key Taps>
+                # https://developer-archive.leapmotion.com/documentation/v2/python/api/Leap.KeyTapGesture.html
+                # if gesture.type is Leap.Gesture.TYPE_KEY_TAP:                        
+                #     key_tap = Leap.KeyTapGesture(gesture)
+                #     if DEBUG:
+                #         print "keytap detected. Raspimouse will start to move."
+                #     self.move()
+                
+                # Turn Left/Right <Swipe>
+                # https://developer-archive.leapmotion.com/documentation/v2/python/api/Leap.SwipeGesture.html
+                if gesture.type is Leap.Gesture.TYPE_SWIPE:
+                    swipe = Leap.SwipeGesture(gesture)
+                    direction = swipe.direction
+                    if abs(direction[0]) > abs(direction[1]): # horizontal movement
+                        if direction[0] > 0:
+                            swipeDirection = "right"
+                            self.turnRight()
+                        else:
+                            swipeDirection = "left"
+                            self.turnLeft()
+                    else: # vertical movement, nothing to do
+                        swipeDirection = "ignore"
+                    if DEBUG:
+                        print direction
+                        print swipeDirection
+                        print "Swipe gesture detected"
+ 
 
 def main():
     # Create a sample listener and controller
