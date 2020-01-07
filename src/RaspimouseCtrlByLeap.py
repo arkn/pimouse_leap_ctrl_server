@@ -1,4 +1,4 @@
-import os, sys, inspect, thread, time, math
+import os, sys, inspect, thread, time, math, paramiko, argparse
 src_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 arch_dir = os.path.abspath(os.path.join(src_dir, '../lib'))
 sys.path.insert(0, os.path.abspath(os.path.join(src_dir, arch_dir)))
@@ -10,6 +10,13 @@ DEBUG = False
 class MotionListener(Leap.Listener):
     def on_connect(self, controller):
         print "Connected"
+        
+        # Argument parser
+        parser = argparse.ArgumentParser()
+        parser.add_argument("ip", help="IP addresse to be connected via SSH")
+        parser.add_argument("user", help="User name to connect via SSH")
+        parser.add_argument("password", help="Password to connect via SSH")
+        self.args = parser.parse_args()
         
         # Kep Tap Motion
         controller.enable_gesture(Leap.Gesture.TYPE_KEY_TAP);
@@ -29,24 +36,47 @@ class MotionListener(Leap.Listener):
     def on_disconnect(self, controller):
         print "Disconnected"
 
+    # SSH connection
+    def ssh_connection(self):
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(self.args.ip, username=self.args.user, password=self.args.password)
+        ssh_session = client.get_transport().open_session()
+        if ssh_session.active:
+            # print "SSH connection establihsed to RaspiMouse"
+            self.ssh = ssh_session
+        return
+
+    def ssh_command(self, opval):
+        self.ssh_connection()
+        if self.ssh.active:
+            cmd = 'rm /tmp/opval; echo ' + str(opval) + ' > /tmp/opval'
+            self.ssh.exec_command(cmd)
+            print(self.ssh.recv(1024))
+        return
+
     # Private Functions
     def move(self):
         if not self.moving: 
             print "Start moving."
             self.moving = True
+            self.ssh_command(1)
 
     def stop(self):
         if self.moving:
             print "Stop."
             self.moving = False
+            self.ssh_command(0)
 
     def turnRight(self):
         if self.moving:
             print "Turn Right."
+            self.ssh_command(2)
             
     def turnLeft(self):
         if self.moving:
             print "Turn Left."
+            self.ssh_command(3)
 
     def on_frame(self, controller):
         frame = controller.frame()
