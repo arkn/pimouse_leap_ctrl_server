@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(src_dir, arch_dir)))
 import Leap
 
 DEBUG = False
+SSH_ENABLED = True
 
 class MotionListener(Leap.Listener):
     def on_connect(self, controller):
@@ -23,7 +24,6 @@ class MotionListener(Leap.Listener):
         controller.config.set("Gesture.KeyTap.MinDownVelocity", 40.0)
         controller.config.set("Gesture.KeyTap.HistorySeconds", .2)
         controller.config.set("Gesture.KeyTap.MinDistance", 1.0)
-        # controller.config.save()
 
         # Swipe
         controller.enable_gesture(Leap.Gesture.TYPE_SWIPE);
@@ -36,31 +36,33 @@ class MotionListener(Leap.Listener):
     def on_disconnect(self, controller):
         print "Disconnected"
 
-    # SSH connection
     def ssh_connection(self):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(self.args.ip, username=self.args.user, password=self.args.password)
         ssh_session = client.get_transport().open_session()
         if ssh_session.active:
-            # print "SSH connection establihsed to RaspiMouse"
+            if DEBUG:
+                print "SSH connection establihsed to RaspiMouse"
             self.ssh = ssh_session
         return
 
     def ssh_command(self, opval):
         self.ssh_connection()
-        if self.ssh.active:
+        if self.ssh.active & SSH_ENABLED:
             cmd = 'rm /tmp/opval; echo ' + str(opval) + ' > /tmp/opval'
             self.ssh.exec_command(cmd)
-            print(self.ssh.recv(1024))
         return
 
-    # Private Functions
     def move(self):
         if not self.moving: 
             print "Start moving."
             self.moving = True
             self.ssh_command(1)
+
+    def goForward(self):
+        print "Go forward."
+        self.ssh_command(1)
 
     def stop(self):
         if self.moving:
@@ -82,7 +84,8 @@ class MotionListener(Leap.Listener):
         frame = controller.frame()
         hands = frame.hands
         if DEBUG:
-            print "Frame id: %d, timestamp: %d, hands: %d, fingers: %d" % (frame.id, frame.timestamp, len(frame.hands), len(frame.fingers))
+            print "Frame id: %d, timestamp: %d, hands: %d, fingers: %d" % \
+                  (frame.id, frame.timestamp, len(frame.hands), len(frame.fingers))
             hand = hands[0] # first hand
             print(hand.palm_position)
 
@@ -95,11 +98,11 @@ class MotionListener(Leap.Listener):
             for gesture in frame.gestures():
                 # start to move by <Key Taps>
                 # https://developer-archive.leapmotion.com/documentation/v2/python/api/Leap.KeyTapGesture.html
-                # if gesture.type is Leap.Gesture.TYPE_KEY_TAP:                        
-                #     key_tap = Leap.KeyTapGesture(gesture)
-                #     if DEBUG:
-                #         print "keytap detected. Raspimouse will start to move."
-                #     self.move()
+                if gesture.type is Leap.Gesture.TYPE_KEY_TAP:                        
+                    key_tap = Leap.KeyTapGesture(gesture)
+                    if DEBUG:
+                        print "keytap detected. Raspimouse will start to move."
+                    self.goForward()
                 
                 # Turn Left/Right <Swipe>
                 # https://developer-archive.leapmotion.com/documentation/v2/python/api/Leap.SwipeGesture.html
@@ -120,7 +123,6 @@ class MotionListener(Leap.Listener):
                         print swipeDirection
                         print "Swipe gesture detected"
  
-
 def main():
     # Create a sample listener and controller
     listener = MotionListener()
